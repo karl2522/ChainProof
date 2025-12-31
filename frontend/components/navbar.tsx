@@ -10,9 +10,9 @@ export function Navbar() {
                 </div>
                 <span className="text-xl font-bold tracking-tight font-mono">ChainProof</span>
             </div>
-            <Button variant="outline" className="gap-2 font-mono border-primary/20 hover:bg-primary/10 bg-transparent">
+            <Button variant="outline" className="gap-2 font-mono border-primary/20 hover:bg-primary/10 bg-transparent cursor-pointer hover:border-primary/40 transition-all">
                 <Wallet className="w-4 h-4" />
-                Connect Wallet
+                <span className="hidden sm:inline">Connect Wallet</span>
             </Button>
         </nav>
     )

@@ -40,7 +40,7 @@ export default function ChainProof() {
                 variant="outline"
                 className="font-mono border-primary/30 text-primary py-0.5 px-3 text-[10px] tracking-widest uppercase"
             >
-              v1.0 Beta • Mainnet Ready
+              Developed by Jared Omen
             </Badge>
             <h1 className="text-clamp-h1 font-bold tracking-tight bg-clip-text text-transparent bg-linear-to-b from-foreground to-foreground/60 leading-tight">
               ChainProof
