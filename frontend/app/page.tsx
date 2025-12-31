@@ -1,65 +1,77 @@
-import Image from "next/image";
+"use client"
 
-export default function Home() {
+import { Navbar } from "@/components/navbar"
+import { FileActionCard } from "@/components/file-action-card"
+import { HistoryTable } from "@/components/history-table"
+import { Badge } from "@/components/ui/badge"
+
+export default function ChainProof() {
+  const handleUpload = async (file: File) => {
+    // Simulated blockchain interaction
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    return {
+      hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      tx: "0x7d3e2f1a9c8b5d4e3f2a1c0b9a8f7e6d5c4b3a210fedcba9876543210abcdef",
+    }
+  }
+
+  const handleVerify = async (file: File) => {
+    // Simulated verification
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    const isMatch = Math.random() > 0.3
+    return {
+      match: isMatch,
+      hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+      <div className="min-h-screen flex flex-col relative overflow-hidden">
+        {/* Subtle Background Gradients */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-secondary/10 blur-[120px] rounded-full" />
+
+        <Navbar />
+
+        <main className="flex-1 flex flex-col items-center px-6 py-4 lg:py-8 max-w-7xl mx-auto w-full z-10">
+          {/* Hero Section */}
+          <div className="text-center space-y-3 mb-6 lg:mb-10">
+            <Badge
+                variant="outline"
+                className="font-mono border-primary/30 text-primary py-0.5 px-3 text-[10px] tracking-widest uppercase"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+              v1.0 Beta • Mainnet Ready
+            </Badge>
+            <h1 className="text-clamp-h1 font-bold tracking-tight bg-clip-text text-transparent bg-linear-to-b from-foreground to-foreground/60 leading-tight">
+              ChainProof
+            </h1>
+            <p className="text-clamp-p text-muted-foreground max-w-2xl mx-auto leading-normal">
+              Immutable file integrity powered by distributed ledgers.
+              <span className="text-foreground"> Anchor</span>, <span className="text-foreground">Verify</span>, and{" "}
+              <span className="text-foreground">Trust</span> your documents with cryptographic certainty.
+            </p>
+          </div>
+
+          {/* Action Cards Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mb-10 lg:mb-16">
+            <FileActionCard type="upload" onAction={handleUpload} />
+            <FileActionCard type="verify" onAction={handleVerify} />
+          </div>
+
+          {/* History Section */}
+          <div className="w-full space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-mono font-bold">Recent Anchors</h2>
+              <div className="h-px bg-border/40 flex-1 mx-6 hidden sm:block" />
+              <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Public Ledger View</p>
+            </div>
+            <HistoryTable />
+          </div>
+        </main>
+
+        <footer className="p-8 text-center text-muted-foreground text-xs font-mono border-t border-border/20">
+          © 2025 ChainProof Protocol • Built for the decentralized web
+        </footer>
+      </div>
+  )
 }
