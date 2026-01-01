@@ -1,13 +1,49 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { FileText, Clock, Hash } from "lucide-react"
-
-const HISTORY_DATA = [
-    { name: "contract_v1.pdf", hash: "8f7e...2a4b", date: "2024-05-12 14:22" },
-    { name: "whitepaper.docx", hash: "4c1d...9e3f", date: "2024-05-11 09:45" },
-    { name: "identity_proof.jpg", hash: "a2b3...f6e0", date: "2024-05-10 18:12" },
-]
+import { fetchHistory, UploadRecord } from "@/lib/api"
+import { Clock, FileText, Hash, Loader2 } from "lucide-react"
+import { useEffect, useState } from "react"
 
 export function HistoryTable() {
+    const [history, setHistory] = useState<UploadRecord[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        const loadHistory = async () => {
+            try {
+                const data = await fetchHistory()
+                setHistory(data)
+            } catch (error) {
+                console.error("Failed to load history:", error)
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        loadHistory()
+
+        // specific event listener for refreshing history
+        const handleRefresh = () => loadHistory()
+        window.addEventListener('refresh-history', handleRefresh)
+
+        return () => window.removeEventListener('refresh-history', handleRefresh)
+    }, [])
+
+    if (loading) {
+        return (
+            <div className="flex justify-center p-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+        )
+    }
+
+    if (history.length === 0) {
+        return (
+            <div className="text-center p-8 text-muted-foreground text-sm">
+                No files anchored yet.
+            </div>
+        )
+    }
+
     return (
         <div className="rounded-xl border border-border/40 bg-card/30 backdrop-blur-sm overflow-hidden">
             <Table>
@@ -31,11 +67,15 @@ export function HistoryTable() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {HISTORY_DATA.map((item, i) => (
-                        <TableRow key={i} className="hover:bg-muted/30 border-border/40">
-                            <TableCell className="font-medium text-sm">{item.name}</TableCell>
-                            <TableCell className="font-mono text-xs text-muted-foreground">{item.hash}</TableCell>
-                            <TableCell className="text-right text-xs text-muted-foreground">{item.date}</TableCell>
+                    {history.map((item) => (
+                        <TableRow key={item.id} className="hover:bg-muted/30 border-border/40">
+                            <TableCell className="font-medium text-sm">{item.fileName}</TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[120px]" title={item.fileHash}>
+                                {item.fileHash.slice(0, 10)}...{item.fileHash.slice(-8)}
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">
+                                {new Date(item.createdAt).toLocaleString()}
+                            </TableCell>
                         </TableRow>
                     ))}
                 </TableBody>

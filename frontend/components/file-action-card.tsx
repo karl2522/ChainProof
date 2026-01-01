@@ -2,19 +2,22 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Upload, ShieldCheck, FileText, CheckCircle2, XCircle, ExternalLink, Loader2 } from "lucide-react"
+import { logUpload, verifyHash } from "@/lib/api"
+import { getConnectedWallet, submitHashToBlockchain } from "@/lib/blockchain"
+import { computeFileHash } from "@/lib/crypto"
 import { cn } from "@/lib/utils"
+import { CheckCircle2, ExternalLink, FileText, Loader2, ShieldCheck, Upload, XCircle } from "lucide-react"
+import { useState } from "react"
+import { toast } from "sonner"
 
 interface FileActionCardProps {
     type: "upload" | "verify"
-    onAction: (file: File) => Promise<any>
 }
 
-export function FileActionCard({ type, onAction }: FileActionCardProps) {
+export function FileActionCard({ type }: FileActionCardProps) {
     const [file, setFile] = useState<File | null>(null)
     const [loading, setLoading] = useState(false)
     const [result, setResult] = useState<any>(null)
@@ -28,12 +31,61 @@ export function FileActionCard({ type, onAction }: FileActionCardProps) {
 
     const handleSubmit = async () => {
         if (!file) return
+
+        // Check wallet connection for upload
+        if (type === "upload") {
+            const walletAddress = await getConnectedWallet()
+            if (!walletAddress) {
+                toast.error("Please connect your wallet first")
+                return
+            }
+        }
+
         setLoading(true)
         try {
-            const res = await onAction(file)
-            setResult(res)
-        } catch (error) {
-            console.error(error)
+            if (type === "upload") {
+                // Upload flow: hash → blockchain → backend
+                const hash = await computeFileHash(file)
+                toast.info("Submitting to blockchain...")
+
+                const txHash = await submitHashToBlockchain(hash)
+                toast.success("Transaction confirmed!")
+
+                // Log to backend
+                await logUpload(file.name, hash, txHash)
+
+                // Dispatch event to refresh history table
+                window.dispatchEvent(new Event('refresh-history'))
+
+                setResult({
+                    hash,
+                    tx: txHash,
+                })
+            } else {
+                // Verify flow: hash → check backend
+                const hash = await computeFileHash(file)
+                const record = await verifyHash(hash)
+
+                if (record) {
+                    setResult({
+                        match: true,
+                        hash,
+                        tx: record.transactionHash,
+                        fileName: record.fileName,
+                    })
+                    toast.success("File verified successfully!")
+                } else {
+                    setResult({
+                        match: false,
+                        hash,
+                    })
+                    toast.error("File not found in blockchain records")
+                }
+            }
+        } catch (error: any) {
+            console.error("Action error:", error)
+            toast.error(error.message || "Operation failed")
+            setResult(null)
         } finally {
             setLoading(false)
         }
@@ -118,7 +170,12 @@ export function FileActionCard({ type, onAction }: FileActionCardProps) {
                                 {isUpload && (
                                     <div className="space-y-1 pt-1">
                                         <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">Transaction</p>
-                                        <a href="#" className="flex items-center gap-1 text-xs font-mono text-primary hover:underline">
+                                        <a
+                                            href={`https://sepolia.etherscan.io/tx/${result.tx}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-1 text-xs font-mono text-primary hover:underline"
+                                        >
                                             {result.tx.slice(0, 24)}... <ExternalLink className="w-3 h-3" />
                                         </a>
                                     </div>
