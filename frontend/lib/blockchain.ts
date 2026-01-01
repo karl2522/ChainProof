@@ -122,6 +122,9 @@ export async function getStoredHash(txHash: string): Promise<string> {
     }
 
     try {
+        const { Interface } = await import('ethers')
+        const { CHAINPROOF_ABI } = await import('./contract-abi')
+
         const provider = new BrowserProvider(window.ethereum)
         const tx = await provider.getTransaction(txHash)
 
@@ -129,14 +132,30 @@ export async function getStoredHash(txHash: string): Promise<string> {
             throw new Error('Transaction not found')
         }
 
-        // Extract hash from transaction data (remove '0x' prefix)
-        const hash = tx.data.slice(2)
+        // Decode transaction data using ABI
+        try {
+            const iface = new Interface(CHAINPROOF_ABI)
+            const decoded = iface.parseTransaction({ data: tx.data, value: tx.value })
 
-        if (!hash || hash.length !== 64) {
-            throw new Error('Invalid hash in transaction data')
+            if (decoded && decoded.name === 'anchor') {
+                // Return the hash (first argument), remove 0x prefix
+                return decoded.args[0].slice(2)
+            }
+        } catch (decodeError) {
+            // Fallback for legacy transactions (direct data) check
+            if (tx.data.length === 66 || tx.data.length === 64) { // 32 bytes + 0x
+                return tx.data.startsWith('0x') ? tx.data.slice(2) : tx.data
+            }
         }
 
-        return hash
+        // If we get here, we couldn't decode the hash
+        // Attempt to extract from raw data if it looks like a simple hash push (legacy)
+        const cleanData = tx.data.startsWith('0x') ? tx.data.slice(2) : tx.data
+        if (cleanData.length === 64) {
+            return cleanData
+        }
+
+        throw new Error('Invalid transaction data: could not extract file hash')
     } catch (error: any) {
         console.error('Error retrieving hash from blockchain:', error)
         throw new Error(error.message || 'Failed to retrieve hash from blockchain')

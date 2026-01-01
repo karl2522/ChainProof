@@ -28,15 +28,27 @@ export function Navbar() {
     }, [])
 
     const checkWalletConnection = async () => {
-        const address = await getConnectedWallet()
-        setWalletAddress(address)
+        // Only check for connection if we have a stored flag, or if we want to be aggressive (but user asked for fix)
+        // Actually, standard behavior is: if localStorage says connected, check eth_accounts.
+        const isConnected = localStorage.getItem('walletConnected') === 'true'
+        if (isConnected) {
+            const address = await getConnectedWallet()
+            if (address) {
+                setWalletAddress(address)
+            } else {
+                // If metamask is locked or permissions revoked, clear storage
+                localStorage.removeItem('walletConnected')
+            }
+        }
     }
 
     const handleAccountsChanged = (accounts: string[]) => {
         if (accounts.length === 0) {
             setWalletAddress(null)
+            localStorage.removeItem('walletConnected')
         } else {
             setWalletAddress(accounts[0])
+            localStorage.setItem('walletConnected', 'true')
         }
     }
 
@@ -45,6 +57,7 @@ export function Navbar() {
         try {
             const address = await connectWallet()
             setWalletAddress(address)
+            localStorage.setItem('walletConnected', 'true')
             toast.success('Wallet connected successfully!')
         } catch (error: any) {
             console.error('Connection error:', error)
@@ -56,6 +69,7 @@ export function Navbar() {
 
     const handleDisconnect = () => {
         setWalletAddress(null)
+        localStorage.removeItem('walletConnected')
         toast.info('Wallet disconnected')
     }
 
