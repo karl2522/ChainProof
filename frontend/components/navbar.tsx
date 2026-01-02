@@ -1,77 +1,13 @@
 "use client"
 
+import { DisconnectDialog } from "@/components/disconnect-dialog"
 import { Button } from "@/components/ui/button"
-import { connectWallet, formatAddress, getConnectedWallet } from "@/lib/blockchain"
-import { LogOut, Wallet } from "lucide-react"
-import { useEffect, useState } from "react"
-import { toast } from "sonner"
+import { formatAddress } from "@/lib/blockchain"
+import { useWallet } from "@/lib/wallet-context"
+import { Wallet } from "lucide-react"
 
 export function Navbar() {
-    const [walletAddress, setWalletAddress] = useState<string | null>(null)
-    const [isConnecting, setIsConnecting] = useState(false)
-
-    // Check if wallet is already connected on mount
-    useEffect(() => {
-        checkWalletConnection()
-
-        // Listen for account changes
-        if (typeof window.ethereum !== 'undefined') {
-            window.ethereum.on('accountsChanged', handleAccountsChanged)
-            window.ethereum.on('chainChanged', () => window.location.reload())
-        }
-
-        return () => {
-            if (typeof window.ethereum !== 'undefined') {
-                window.ethereum.removeListener('accountsChanged', handleAccountsChanged)
-            }
-        }
-    }, [])
-
-    const checkWalletConnection = async () => {
-        // Only check for connection if we have a stored flag, or if we want to be aggressive (but user asked for fix)
-        // Actually, standard behavior is: if localStorage says connected, check eth_accounts.
-        const isConnected = localStorage.getItem('walletConnected') === 'true'
-        if (isConnected) {
-            const address = await getConnectedWallet()
-            if (address) {
-                setWalletAddress(address)
-            } else {
-                // If metamask is locked or permissions revoked, clear storage
-                localStorage.removeItem('walletConnected')
-            }
-        }
-    }
-
-    const handleAccountsChanged = (accounts: string[]) => {
-        if (accounts.length === 0) {
-            setWalletAddress(null)
-            localStorage.removeItem('walletConnected')
-        } else {
-            setWalletAddress(accounts[0])
-            localStorage.setItem('walletConnected', 'true')
-        }
-    }
-
-    const handleConnect = async () => {
-        setIsConnecting(true)
-        try {
-            const address = await connectWallet()
-            setWalletAddress(address)
-            localStorage.setItem('walletConnected', 'true')
-            toast.success('Wallet connected successfully!')
-        } catch (error: any) {
-            console.error('Connection error:', error)
-            toast.error(error.message || 'Failed to connect wallet')
-        } finally {
-            setIsConnecting(false)
-        }
-    }
-
-    const handleDisconnect = () => {
-        setWalletAddress(null)
-        localStorage.removeItem('walletConnected')
-        toast.info('Wallet disconnected')
-    }
+    const { walletAddress, isConnecting, connect, disconnect, isConnected } = useWallet()
 
     return (
         <nav className="flex items-center justify-between p-4 px-6 max-w-7xl mx-auto w-full">
@@ -80,25 +16,17 @@ export function Navbar() {
                 <span className="text-xl font-bold tracking-tight font-mono">ChainProof</span>
             </div>
 
-            {walletAddress ? (
+            {isConnected && walletAddress ? (
                 <div className="flex items-center gap-2">
                     <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg border border-primary/20 bg-primary/5">
                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                         <span className="text-sm font-mono">{formatAddress(walletAddress)}</span>
                     </div>
-                    <Button
-                        onClick={handleDisconnect}
-                        variant="outline"
-                        size="sm"
-                        className="gap-2 font-mono border-destructive/20 hover:bg-destructive/10 bg-transparent cursor-pointer hover:border-destructive/40 transition-all"
-                    >
-                        <LogOut className="w-4 h-4" />
-                        <span className="hidden sm:inline">Disconnect</span>
-                    </Button>
+                    <DisconnectDialog onConfirm={disconnect} />
                 </div>
             ) : (
                 <Button
-                    onClick={handleConnect}
+                    onClick={connect}
                     disabled={isConnecting}
                     variant="outline"
                     className="gap-2 font-mono border-primary/20 hover:bg-primary/10 bg-transparent cursor-pointer hover:border-primary/40 transition-all"

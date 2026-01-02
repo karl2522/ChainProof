@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { logUpload, verifyHash } from "@/lib/api"
-import { getConnectedWallet, submitHashToBlockchain } from "@/lib/blockchain"
+import { submitHashToBlockchain } from "@/lib/blockchain"
 import { computeFileHash } from "@/lib/crypto"
 import { cn } from "@/lib/utils"
 import { CheckCircle2, ExternalLink, FileText, Loader2, ShieldCheck, Upload, XCircle } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
+
+import { useWallet } from "@/lib/wallet-context"
 
 interface FileActionCardProps {
     type: "upload" | "verify"
@@ -21,6 +23,11 @@ export function FileActionCard({ type }: FileActionCardProps) {
     const [file, setFile] = useState<File | null>(null)
     const [loading, setLoading] = useState(false)
     const [result, setResult] = useState<any>(null)
+
+    const { isConnected, connect } = useWallet()
+    const isUpload = type === "upload"
+    // Disable interaction if uploading and not connected
+    const isDisabled = isUpload && !isConnected
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -32,13 +39,14 @@ export function FileActionCard({ type }: FileActionCardProps) {
     const handleSubmit = async () => {
         if (!file) return
 
-        // Check wallet connection for upload
-        if (type === "upload") {
-            const walletAddress = await getConnectedWallet()
-            if (!walletAddress) {
-                toast.error("Please connect your wallet first")
-                return
-            }
+        // Wallet check is now partly handled by disabled state, but good to keep double check
+        if (isUpload && !isConnected) {
+            toast.error("Wallet Not Connected", {
+                description: "Please connect your MetaMask wallet using the button in the top right corner."
+            })
+            // Optionally try to connect?
+            connect()
+            return
         }
 
         setLoading(true)
@@ -91,8 +99,6 @@ export function FileActionCard({ type }: FileActionCardProps) {
         }
     }
 
-    const isUpload = type === "upload"
-
     return (
         <Card className="border-border/40 bg-card/50 backdrop-blur-sm transition-all hover:border-primary/30">
             <CardHeader>
@@ -108,13 +114,29 @@ export function FileActionCard({ type }: FileActionCardProps) {
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="relative group">
-                    <Input type="file" onChange={handleFileChange} className="hidden" id={`file-input-${type}`} />
+                    <Input
+                        type="file"
+                        onChange={handleFileChange}
+                        className="hidden"
+                        id={`file-input-${type}`}
+                        disabled={isDisabled}
+                    />
                     <label
                         htmlFor={`file-input-${type}`}
                         className={cn(
-                            "flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer transition-all",
-                            file ? "border-primary/50 bg-primary/5" : "border-border/60 hover:border-primary/40 hover:bg-muted/50",
+                            "flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all",
+                            isDisabled
+                                ? "cursor-not-allowed opacity-50 border-muted"
+                                : "cursor-pointer border-border/60 hover:border-primary/40 hover:bg-muted/50",
+                            file && !isDisabled ? "border-primary/50 bg-primary/5" : ""
                         )}
+                        onClick={(e) => {
+                            if (isDisabled) {
+                                e.preventDefault()
+                                toast.error("Connect wallet to upload files")
+                                connect() // Prompt connection on click
+                            }
+                        }}
                     >
                         {file ? (
                             <div className="flex items-center gap-2 text-primary">
@@ -124,7 +146,9 @@ export function FileActionCard({ type }: FileActionCardProps) {
                         ) : (
                             <>
                                 <Upload className="w-6 h-6 mb-2 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground">Click to select file</span>
+                                <span className="text-sm text-muted-foreground">
+                                    {isDisabled ? "Connect wallet to upload" : "Click to select file"}
+                                </span>
                             </>
                         )}
                     </label>
@@ -132,13 +156,18 @@ export function FileActionCard({ type }: FileActionCardProps) {
 
                 <Button
                     onClick={handleSubmit}
-                    disabled={!file || loading}
+                    disabled={(!file && !isDisabled) || loading || (isUpload && !isConnected)}
                     className="w-full font-mono py-6 text-lg"
                     variant={isUpload ? "default" : "secondary"}
                 >
                     {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    {isUpload ? "Upload to Blockchain" : "Verify File"}
+                    {isUpload ? (isConnected ? "Upload to Blockchain" : "Connect Wallet to Upload") : "Verify File"}
                 </Button>
+                {isUpload && (
+                    <p className="text-xs text-center text-muted-foreground mt-2">
+                        * Requires wallet connection for blockchain transaction
+                    </p>
+                )}
 
                 {result && (
                     <div

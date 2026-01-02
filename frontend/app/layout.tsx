@@ -30,6 +30,8 @@ export const metadata: Metadata = {
     },
 }
 
+import { WalletProvider } from "@/lib/wallet-context"
+
 export default function RootLayout({
     children,
 }: Readonly<{
@@ -38,7 +40,9 @@ export default function RootLayout({
     return (
         <html lang="en" className="dark">
             <body className={`${_geist.variable} ${_geistMono.variable} font-sans antialiased bg-background text-foreground`}>
-                {children}
+                <WalletProvider>
+                    {children}
+                </WalletProvider>
                 <Analytics />
             </body>
         </html>

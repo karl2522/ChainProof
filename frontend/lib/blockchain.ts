@@ -55,6 +55,11 @@ export async function getConnectedWallet(): Promise<string | null> {
         return null
     }
 
+    // Respect explicit disconnect state
+    if (localStorage.getItem('walletConnected') !== 'true') {
+        return null
+    }
+
     try {
         const provider = new BrowserProvider(window.ethereum)
         const accounts = await provider.send('eth_accounts', [])
