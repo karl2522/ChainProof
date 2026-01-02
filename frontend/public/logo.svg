@@ -1,0 +1,7 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Rounded square background, rotated by 12 degrees -->
+  <rect x="2.5" y="2.5" width="27" height="27" rx="8" transform="rotate(12 16 16)" fill="white" />
+  
+  <!-- "C" letter in the center -->
+  <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="20" fill="black" transform="rotate(12 16 16)">C</text>
+</svg>
