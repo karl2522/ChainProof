@@ -54,10 +54,40 @@ export function FileActionCard({ type }: FileActionCardProps) {
             if (type === "upload") {
                 // Upload flow: hash → blockchain → backend
                 const hash = await computeFileHash(file)
-                toast.info("Submitting to blockchain...")
+
+                // Check if already exists to prevent unnecessary gas fees
+                try {
+                    const existingRecord = await verifyHash(hash)
+                    if (existingRecord) {
+                        toast.warning("File Already Registered", {
+                            description: "This file has already been anchored on the blockchain.",
+                            action: {
+                                label: "View TX",
+                                onClick: () => window.open(`https://sepolia.etherscan.io/tx/${existingRecord.transactionHash}`, '_blank')
+                            }
+                        })
+
+                        setResult({
+                            hash,
+                            tx: existingRecord.transactionHash,
+                            isExisting: true,
+                        })
+                        setLoading(false)
+                        return
+                    }
+                } catch (err) {
+                    // Ignore check errors, proceed to upload
+                    console.warn("Pre-check verification failed, proceeding with upload:", err)
+                }
+
+                toast.info("Submitting to blockchain...", {
+                    description: "Please confirm the transaction in your wallet."
+                })
 
                 const txHash = await submitHashToBlockchain(hash)
-                toast.success("Transaction confirmed!")
+                toast.success("Transaction confirmed!", {
+                    description: "Your file hash has been securely anchored."
+                })
 
                 // Log to backend
                 await logUpload(file.name, hash, txHash)
@@ -68,6 +98,7 @@ export function FileActionCard({ type }: FileActionCardProps) {
                 setResult({
                     hash,
                     tx: txHash,
+                    isExisting: false,
                 })
             } else {
                 // Verify flow: hash → check backend
@@ -92,7 +123,20 @@ export function FileActionCard({ type }: FileActionCardProps) {
             }
         } catch (error: any) {
             console.error("Action error:", error)
-            toast.error(error.message || "Operation failed")
+
+            if (error.message?.includes("already exists")) {
+                toast.error("Duplicate Entry", {
+                    description: "This file or transaction hash has already been registered."
+                })
+            } else if (error.message?.includes("rejected by user") || error.code === "ACTION_REJECTED") {
+                toast.error("Transaction Rejected", {
+                    description: "You rejected the transaction in your wallet."
+                })
+            } else {
+                toast.error("Operation Failed", {
+                    description: error.message || "An unexpected error occurred."
+                })
+            }
             setResult(null)
         } finally {
             setLoading(false)
@@ -157,13 +201,13 @@ export function FileActionCard({ type }: FileActionCardProps) {
                 <Button
                     onClick={handleSubmit}
                     disabled={(!file && !isDisabled) || loading || (isUpload && !isConnected)}
-                    className="w-full font-mono py-6 text-lg"
+                    className="w-full font-mono py-6 text-lg cursor-pointer"
                     variant={isUpload ? "default" : "secondary"}
                 >
                     {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     {isUpload ? (isConnected ? "Upload to Blockchain" : "Connect Wallet to Upload") : "Verify File"}
                 </Button>
-                {isUpload && (
+                {isUpload && !isConnected && (
                     <p className="text-xs text-center text-muted-foreground mt-2">
                         * Requires wallet connection for blockchain transaction
                     </p>
@@ -190,7 +234,13 @@ export function FileActionCard({ type }: FileActionCardProps) {
                             )}
                             <div className="flex-1 space-y-2 overflow-hidden">
                                 <p className="font-bold text-sm">
-                                    {isUpload ? "Successfully Anchored" : result.match ? "Verified Authenticity" : "Integrity Mismatch"}
+                                    {isUpload
+                                        ? result.isExisting
+                                            ? "File Previously Anchored"
+                                            : "Successfully Anchored"
+                                        : result.match
+                                            ? "Verified Authenticity"
+                                            : "Integrity Mismatch"}
                                 </p>
                                 <div className="space-y-1">
                                     <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">SHA-256 Hash</p>
