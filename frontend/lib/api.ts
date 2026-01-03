@@ -5,6 +5,8 @@ export interface UploadRecord {
     fileName: string
     fileHash: string
     transactionHash: string
+    fileSize?: number
+    mimeType?: string
     createdAt: string
 }
 
@@ -13,11 +15,15 @@ export interface UploadRecord {
  * @param fileName - Name of the uploaded file
  * @param fileHash - SHA-256 hash of the file
  * @param transactionHash - Blockchain transaction hash
+ * @param fileSize - Size of the file in bytes
+ * @param mimeType - MIME type of the file
  */
 export async function logUpload(
     fileName: string,
     fileHash: string,
-    transactionHash: string
+    transactionHash: string,
+    fileSize?: number,
+    mimeType?: string
 ): Promise<void> {
     try {
         const response = await fetch(`${API_BASE_URL}/api/upload`, {
@@ -29,6 +35,8 @@ export async function logUpload(
                 fileName,
                 fileHash,
                 transactionHash,
+                fileSize,
+                mimeType,
             }),
         })
 

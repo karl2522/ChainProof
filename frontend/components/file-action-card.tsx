@@ -1,28 +1,32 @@
 "use client"
 
+import { CheckCircle2, ExternalLink, FileText, FileType, HardDrive, Loader2, ShieldCheck, Upload, XCircle } from "lucide-react"
 import type React from "react"
+import { useState } from "react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Progress } from "@/components/ui/progress"
 import { logUpload, verifyHash } from "@/lib/api"
 import { submitHashToBlockchain } from "@/lib/blockchain"
 import { computeFileHash } from "@/lib/crypto"
 import { cn } from "@/lib/utils"
-import { CheckCircle2, ExternalLink, FileText, Loader2, ShieldCheck, Upload, XCircle } from "lucide-react"
-import { useState } from "react"
-import { toast } from "sonner"
-
 import { useWallet } from "@/lib/wallet-context"
 
 interface FileActionCardProps {
     type: "upload" | "verify"
 }
 
+type UploadStep = "idle" | "hashing" | "checking" | "signing" | "complete"
+
 export function FileActionCard({ type }: FileActionCardProps) {
     const [file, setFile] = useState<File | null>(null)
-    const [loading, setLoading] = useState(false)
+    const [step, setStep] = useState<UploadStep>("idle")
+    const [loading, setLoading] = useState(false) // Keep for generic loading state compatibility
     const [result, setResult] = useState<any>(null)
+    const [dragActive, setDragActive] = useState(false)
 
     const { isConnected, connect } = useWallet()
     const isUpload = type === "upload"
@@ -33,29 +37,82 @@ export function FileActionCard({ type }: FileActionCardProps) {
         if (e.target.files && e.target.files[0]) {
             setFile(e.target.files[0])
             setResult(null)
+            setStep("idle")
         }
+    }
+
+    const handleDrag = (e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (e.type === "dragenter" || e.type === "dragover") {
+            setDragActive(true)
+        } else if (e.type === "dragleave") {
+            setDragActive(false)
+        }
+    }
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setDragActive(false)
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            setFile(e.dataTransfer.files[0])
+            setResult(null)
+            setStep("idle")
+        }
+    }
+
+    const getProgressValue = () => {
+        switch (step) {
+            case "hashing": return 25
+            case "checking": return 50
+            case "signing": return 75
+            case "complete": return 100
+            default: return 0
+        }
+    }
+
+    const getStepLabel = () => {
+        switch (step) {
+            case "hashing": return "Computing SHA-256 Hash..."
+            case "checking": return "Verifying Uniqueness..."
+            case "signing": return "Waiting for Wallet Signature..."
+            case "complete": return "Upload Complete"
+            default: return ""
+        }
+    }
+
+    const formatBytes = (bytes: number, decimals = 2) => {
+        if (!+bytes) return '0 Bytes'
+        const k = 1024
+        const dm = decimals < 0 ? 0 : decimals
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+        const i = Math.floor(Math.log(bytes) / Math.log(k))
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
     }
 
     const handleSubmit = async () => {
         if (!file) return
 
-        // Wallet check is now partly handled by disabled state, but good to keep double check
+        // Wallet check
         if (isUpload && !isConnected) {
             toast.error("Wallet Not Connected", {
                 description: "Please connect your MetaMask wallet using the button in the top right corner."
             })
-            // Optionally try to connect?
             connect()
             return
         }
 
         setLoading(true)
+        setStep("hashing")
+
         try {
             if (type === "upload") {
-                // Upload flow: hash → blockchain → backend
+                // 1. Hash
                 const hash = await computeFileHash(file)
 
-                // Check if already exists to prevent unnecessary gas fees
+                // 2. Check
+                setStep("checking")
                 try {
                     const existingRecord = await verifyHash(hash)
                     if (existingRecord) {
@@ -71,26 +128,32 @@ export function FileActionCard({ type }: FileActionCardProps) {
                             hash,
                             tx: existingRecord.transactionHash,
                             isExisting: true,
+                            fileSize: existingRecord.fileSize,
+                            mimeType: existingRecord.mimeType
                         })
+                        setStep("idle")
                         setLoading(false)
                         return
                     }
                 } catch (err) {
-                    // Ignore check errors, proceed to upload
                     console.warn("Pre-check verification failed, proceeding with upload:", err)
                 }
 
+                // 3. Sign
+                setStep("signing")
                 toast.info("Submitting to blockchain...", {
                     description: "Please confirm the transaction in your wallet."
                 })
 
                 const txHash = await submitHashToBlockchain(hash)
+
+                setStep("complete")
                 toast.success("Transaction confirmed!", {
                     description: "Your file hash has been securely anchored."
                 })
 
-                // Log to backend
-                await logUpload(file.name, hash, txHash)
+                // 4. Log
+                await logUpload(file.name, hash, txHash, file.size, file.type)
 
                 // Dispatch event to refresh history table
                 window.dispatchEvent(new Event('refresh-history'))
@@ -99,10 +162,15 @@ export function FileActionCard({ type }: FileActionCardProps) {
                     hash,
                     tx: txHash,
                     isExisting: false,
+                    fileSize: file.size,
+                    mimeType: file.type
                 })
             } else {
-                // Verify flow: hash → check backend
+                // Verify flow
+                setStep("hashing")
                 const hash = await computeFileHash(file)
+
+                setStep("checking")
                 const record = await verifyHash(hash)
 
                 if (record) {
@@ -111,6 +179,8 @@ export function FileActionCard({ type }: FileActionCardProps) {
                         hash,
                         tx: record.transactionHash,
                         fileName: record.fileName,
+                        fileSize: record.fileSize,
+                        mimeType: record.mimeType
                     })
                     toast.success("File verified successfully!")
                 } else {
@@ -120,9 +190,11 @@ export function FileActionCard({ type }: FileActionCardProps) {
                     })
                     toast.error("File not found in blockchain records")
                 }
+                setStep("idle")
             }
         } catch (error: any) {
             console.error("Action error:", error)
+            setStep("idle")
 
             if (error.message?.includes("already exists")) {
                 toast.error("Duplicate Entry", {
@@ -157,7 +229,13 @@ export function FileActionCard({ type }: FileActionCardProps) {
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="relative group">
+                <div
+                    className="relative group"
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                >
                     <Input
                         type="file"
                         onChange={handleFileChange}
@@ -171,14 +249,17 @@ export function FileActionCard({ type }: FileActionCardProps) {
                             "flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl transition-all",
                             isDisabled
                                 ? "cursor-not-allowed opacity-50 border-muted"
-                                : "cursor-pointer border-border/60 hover:border-primary/40 hover:bg-muted/50",
-                            file && !isDisabled ? "border-primary/50 bg-primary/5" : ""
+                                : "cursor-pointer",
+                            dragActive
+                                ? "border-primary bg-primary/10 scale-[1.02]"
+                                : "border-border/60 hover:border-primary/40 hover:bg-muted/50",
+                            file && !isDisabled && !dragActive ? "border-primary/50 bg-primary/5" : ""
                         )}
                         onClick={(e) => {
                             if (isDisabled) {
                                 e.preventDefault()
                                 toast.error("Connect wallet to upload files")
-                                connect() // Prompt connection on click
+                                connect()
                             }
                         }}
                     >
@@ -189,24 +270,49 @@ export function FileActionCard({ type }: FileActionCardProps) {
                             </div>
                         ) : (
                             <>
-                                <Upload className="w-6 h-6 mb-2 text-muted-foreground" />
+                                <Upload className={cn(
+                                    "w-6 h-6 mb-2 text-muted-foreground transition-transform duration-200",
+                                    dragActive ? "scale-110 text-primary" : ""
+                                )} />
                                 <span className="text-sm text-muted-foreground">
-                                    {isDisabled ? "Connect wallet to upload" : "Click to select file"}
+                                    {isDisabled
+                                        ? "Connect wallet to upload"
+                                        : dragActive
+                                            ? "Drop file here..."
+                                            : "Drag & drop or click to select file"}
                                 </span>
                             </>
                         )}
                     </label>
                 </div>
 
+                {step !== "idle" && (
+                    <div className="space-y-2 animate-in fade-in zoom-in duration-300">
+                        <div className="flex justify-between text-xs text-muted-foreground font-mono">
+                            <span>{getStepLabel()}</span>
+                            <span>{getProgressValue()}%</span>
+                        </div>
+                        <Progress value={getProgressValue()} className="h-2" />
+                    </div>
+                )}
+
                 <Button
                     onClick={handleSubmit}
                     disabled={(!file && !isDisabled) || loading || (isUpload && !isConnected)}
-                    className="w-full font-mono py-6 text-lg cursor-pointer"
+                    className="w-full font-mono py-6 text-lg cursor-pointer transition-all duration-200"
                     variant={isUpload ? "default" : "secondary"}
                 >
                     {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    {isUpload ? (isConnected ? "Upload to Blockchain" : "Connect Wallet to Upload") : "Verify File"}
+                    {isUpload
+                        ? (isConnected
+                            ? (loading && step !== "idle"
+                                ? (step === "signing" ? "Waiting for Wallet..." : "Processing...")
+                                : "Upload to Blockchain")
+                            : "Connect Wallet to Upload")
+                        : (loading ? "Verifying..." : "Verify File")
+                    }
                 </Button>
+
                 {isUpload && !isConnected && (
                     <p className="text-xs text-center text-muted-foreground mt-2">
                         * Requires wallet connection for blockchain transaction
@@ -233,20 +339,37 @@ export function FileActionCard({ type }: FileActionCardProps) {
                                 <XCircle className="w-5 h-5 text-destructive mt-0.5" />
                             )}
                             <div className="flex-1 space-y-2 overflow-hidden">
-                                <p className="font-bold text-sm">
-                                    {isUpload
-                                        ? result.isExisting
-                                            ? "File Previously Anchored"
-                                            : "Successfully Anchored"
-                                        : result.match
-                                            ? "Verified Authenticity"
-                                            : "Integrity Mismatch"}
-                                </p>
+                                <div className="flex justify-between items-start">
+                                    <p className="font-bold text-sm">
+                                        {isUpload
+                                            ? result.isExisting
+                                                ? "File Previously Anchored"
+                                                : "Successfully Anchored"
+                                            : result.match
+                                                ? "Verified Authenticity"
+                                                : "Integrity Mismatch"}
+                                    </p>
+                                    {(result.fileSize || result.mimeType) && (
+                                        <div className="flex gap-2 text-[10px] text-muted-foreground font-mono">
+                                            {result.mimeType && (
+                                                <span className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded border border-border/50">
+                                                    <FileType className="w-3 h-3" /> {result.mimeType.split('/')[1]?.toUpperCase() || 'FILE'}
+                                                </span>
+                                            )}
+                                            {result.fileSize && (
+                                                <span className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded border border-border/50">
+                                                    <HardDrive className="w-3 h-3" /> {formatBytes(result.fileSize)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="space-y-1">
                                     <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">SHA-256 Hash</p>
                                     <p className="text-xs font-mono break-all text-foreground/80">{result.hash}</p>
                                 </div>
-                                {isUpload && (
+                                {(isUpload || (result.match && result.tx)) && (
                                     <div className="space-y-1 pt-1">
                                         <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">Transaction</p>
                                         <a

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches } from 'class-validator';
 
 export class CreateUploadDto {
     @IsNotEmpty()
@@ -15,4 +15,12 @@ export class CreateUploadDto {
     @IsString()
     @Matches(/^0x[a-fA-F0-9]{64}$/, { message: 'Transaction hash must be a valid Ethereum transaction hash (0x + 64 hex chars)' })
     transactionHash: string;
+
+    @IsOptional()
+    @IsInt()
+    fileSize?: number;
+
+    @IsOptional()
+    @IsString()
+    mimeType?: string;
 }
